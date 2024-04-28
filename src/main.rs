@@ -3,6 +3,7 @@ use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek_ng::ristretto::CompressedRistretto;
 use merlin::Transcript;
 use serde::Deserialize;
+use std::time::Instant;
 use actix_web::get;
 
 #[derive(Deserialize)]
@@ -13,6 +14,8 @@ struct ProofData {
 
 #[post("/verify_proof")]
 async fn verify_proof(data: web::Json<ProofData>) -> impl Responder {
+    let start_time = Instant::now(); // Start timing the verification
+
     let pc_gens = PedersenGens::default();
     let bp_gens = BulletproofGens::new(64, 1);
 
@@ -43,13 +46,23 @@ async fn verify_proof(data: web::Json<ProofData>) -> impl Responder {
         64,
     );
 
+    let duration = start_time.elapsed(); // End timing the verification
+
     match verification_result {
-        Ok(_) => HttpResponse::Ok().body("Proof verified successfully"),
+        Ok(_) => {
+            println!("Verification time: {:?}", duration);
+            HttpResponse::Ok().body("Proof verified successfully")
+        },
         Err(e) => {
-            println!("Verification failed: {:?}", e);
+            println!("Verification failed: {:?} after {:?}", e, duration);
             HttpResponse::BadRequest().body("Proof verification failed")
         },
     }
+}
+
+#[get("/health")]
+async fn health() -> impl Responder {
+    HttpResponse::Ok().body("OK")
 }
 
 #[get("/")]
@@ -64,8 +77,9 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .service(index)
             .service(verify_proof)
+            .service(health)
     })
-    .bind("127.0.0.1:8080")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await
 }
